@@ -13,11 +13,17 @@ class RequestHandler
     private $token;
     private $signatureMethod;
 
+    private $baseUrl;
+    private $version;
+
     /**
      * Instantiate a new RequestHandler
      */
     public function __construct()
     {
+        $this->baseUrl = 'https://api.tumblr.com/';
+        $this->version = '0.1.2';
+
         $this->signatureMethod = new \Eher\OAuth\HmacSha1();
         $this->client = new \Guzzle\Http\Client(null, array(
             'redirect.disable' => true
@@ -47,6 +53,21 @@ class RequestHandler
     }
 
     /**
+     * Set the base url for this request handler.
+     *
+     * @param string $url The base url (e.g. https://api.tumblr.com)
+     */
+    public function setBaseUrl($url)
+    {
+        // Ensure we have a trailing slash since it is expected in {@link request}.
+        if (substr($url, -1) !== '/') {
+            $url .= '/';
+        }
+
+        $this->baseUrl = $url;
+    }
+
+    /**
      * Make a request with this request handler
      *
      * @param string $method  one of GET, POST
@@ -58,17 +79,20 @@ class RequestHandler
     public function request($method, $path, $options)
     {
         // Ensure we have options
-        $options ?: array();
+        $options = $options ?: array();
 
         // Take off the data param, we'll add it back after signing
         $file = isset($options['data']) ? $options['data'] : false;
         unset($options['data']);
 
         // Get the oauth signature to put in the request header
-        $url = "http://api.tumblr.com/$path";
+        $url = $this->baseUrl . $path;
         $oauth = \Eher\OAuth\Request::from_consumer_and_token(
-            $this->consumer, $this->token,
-            $method, $url, $options
+            $this->consumer,
+            $this->token,
+            $method,
+            $url,
+            $options
         );
         $oauth->sign_request($this->signatureMethod, $this->consumer, $this->token);
         $authHeader = $oauth->to_header();
@@ -86,9 +110,19 @@ class RequestHandler
             $request = $this->client->post($url, null, $options);
             $request->addHeader('Authorization', $authString);
             if ($file) {
-                $request->addPostFiles(array('data' => $file));
+                if (is_array($file)) {
+                    $collection = array();
+                    foreach ($file as $idx => $f) {
+                        $collection["data[$idx]"] = $f;
+                    }
+                    $request->addPostFiles($collection);
+                } else {
+                    $request->addPostFiles(array('data' => $file));
+                }
             }
         }
+
+        $request->setHeader('User-Agent', 'tumblr.php/'.$this->version);
 
         // Guzzle throws errors, but we collapse them and just grab the
         // response, since we deal with this at the \Tumblr\Client level
@@ -102,7 +136,7 @@ class RequestHandler
         $obj = new \stdClass;
         $obj->status = $response->getStatusCode();
         $obj->body = $response->getBody();
-        $obj->headers = $response->getHeaders();
+        $obj->headers = $response->getHeaders()->toArray();
 
         return $obj;
     }

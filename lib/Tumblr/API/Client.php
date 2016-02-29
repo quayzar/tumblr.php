@@ -99,10 +99,10 @@ class Client
      * @param  array $options the options for the call
      * @return array the response array
      */
-     public function getLikedPosts($options = null)
-     {
+    public function getLikedPosts($options = null)
+    {
         return $this->getRequest('v2/user/likes', $options, false);
-     }
+    }
 
     /**
      * Follow a blog
@@ -371,12 +371,6 @@ class Client
         return $this->getRequest($path, $options, false);
     }
 
-    /*
-     ************
-     ************
-     ************
-     */
-
     /**
      * Make a GET request to the given endpoint and return the response
      *
@@ -404,19 +398,26 @@ class Client
      */
     private function postRequest($path, $options, $addApiKey)
     {
-        $response = $this->makeRequest('POST', $path, $options, $addApiKey);
+        if (isset($options['source']) && is_array($options['source'])) {
+            $sources = $options['source'];
+            unset($options['source']);
+            foreach ($sources as $i => $source) {
+                $options["source[$i]"] = $source;
+            }
+        }
 
+        $response = $this->makeRequest('POST', $path, $options, $addApiKey);
         return $this->parseResponse($response);
     }
 
-  /**
-   * Parse a response and return an appropriate result
-   *
-   * @param  \stdClass $response the response from the server
-   *
-   * @throws RequestException
-   * @return array  the response data
-   */
+    /**
+     * Parse a response and return an appropriate result
+     *
+     * @param  \stdClass $response the response from the server
+     *
+     * @throws RequestException
+     * @return array  the response data
+     */
     private function parseResponse($response)
     {
         $response->json = json_decode($response->body);
